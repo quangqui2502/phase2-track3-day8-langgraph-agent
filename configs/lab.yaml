@@ -1,4 +1,5 @@
 scenarios_path: data/sample/scenarios.jsonl
 checkpointer: sqlite
 database_url: outputs/checkpoints.db
-report_path: reports/lab_report.md
+# report_path intentionally omitted — lab_report.md is hand-written, not auto-generated.
+# The auto-writer in cli.py only fires when this key is set.
