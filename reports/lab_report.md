@@ -2,7 +2,7 @@
 
 ## 1. Student
 
-- **Name:** Trần Quang Quí (quangqui2502)
+- **Name:** 2A202600305 - Trần Quang Quí (quangqui2502)
 - **Repo:** https://github.com/quangqui2502/phase2-track3-day8-langgraph-agent
 - **Commit:** `4258100`
 - **Date:** 2026-05-11
