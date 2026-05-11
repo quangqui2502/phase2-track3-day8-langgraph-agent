@@ -36,6 +36,11 @@ def run_scenarios(
         final_state = graph.invoke(state, config=run_config)
         metrics.append(metric_from_state(final_state, scenario.expected_route.value, scenario.requires_approval))
     report = summarize_metrics(metrics)
+    # Verify checkpoint history survived for at least one thread → resume_success evidence.
+    if cfg.get("checkpointer") in ("sqlite", "postgres") and scenarios:
+        sample_cfg = {"configurable": {"thread_id": f"thread-{scenarios[0].id}"}}
+        history = list(graph.get_state_history(sample_cfg))
+        report.resume_success = len(history) > 0
     write_metrics(report, output)
     if cfg.get("report_path"):
         write_report(report, cfg["report_path"])

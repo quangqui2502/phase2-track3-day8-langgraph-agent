@@ -19,10 +19,15 @@ def build_checkpointer(kind: str = "memory", database_url: str | None = None) ->
         return MemorySaver()
     if kind == "sqlite":
         try:
+            import sqlite3
+
             from langgraph.checkpoint.sqlite import SqliteSaver
         except ImportError as exc:
             raise RuntimeError("SQLite checkpointer requires: pip install langgraph-checkpoint-sqlite") from exc
-        return SqliteSaver.from_conn_string(database_url or "checkpoints.db")
+        # from_conn_string() yields a context-managed saver — not what we want for a
+        # long-lived CLI run. Instantiate directly with a thread-safe connection.
+        conn = sqlite3.connect(database_url or "checkpoints.db", check_same_thread=False)
+        return SqliteSaver(conn)
     if kind == "postgres":
         try:
             from langgraph.checkpoint.postgres import PostgresSaver

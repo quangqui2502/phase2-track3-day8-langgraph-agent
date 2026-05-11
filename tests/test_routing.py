@@ -10,7 +10,9 @@ def test_route_after_classify():
 
 def test_route_after_approval():
     assert route_after_approval({"approval": {"approved": True}}) == "tool"
-    assert route_after_approval({"approval": {"approved": False}}) == "clarify"
+    # Rejection skips tool entirely; approval_node sets the denial as final_answer.
+    assert route_after_approval({"approval": {"approved": False}}) == "finalize"
+    assert route_after_approval({}) == "finalize"  # missing approval treated as rejection
 
 
 def test_route_after_retry_bound():

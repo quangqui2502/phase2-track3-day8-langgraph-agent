@@ -22,26 +22,35 @@ def intake_node(state: AgentState) -> dict:
     }
 
 
+RISKY_KEYWORDS = {"refund", "delete", "send", "cancel", "remove", "revoke", "wipe", "terminate"}
+ERROR_KEYWORDS = {"timeout", "fail", "failure", "error", "crash", "unavailable", "broken"}
+TOOL_KEYWORDS = {"status", "order", "lookup", "check", "track", "find", "search", "fetch"}
+VAGUE_PRONOUNS = {"it", "this", "that", "them", "they", "those"}
+
+
 def classify_node(state: AgentState) -> dict:
     """Classify the query into a route.
 
-    TODO(student): replace keyword heuristics with a clear routing policy.
-    Required routes: simple, tool, missing_info, risky, error.
+    Policy (priority order): risky > error > tool > missing_info > simple.
+    Risky wins on co-occurrence so dangerous actions always hit the approval gate.
+    Matching is token-based (whole words), not substring — avoids "preFUND" → "refund".
     """
     query = state.get("query", "").lower()
-    words = query.split()
-    clean_words = [w.strip("?!.,;:") for w in words]
+    tokens = {w.strip("?!.,;:'\"") for w in query.split()}
+
     route = Route.SIMPLE
     risk_level = "low"
-    if "refund" in query or "delete" in query or "send" in query:
+
+    if tokens & RISKY_KEYWORDS:
         route = Route.RISKY
         risk_level = "high"
-    elif "status" in query or "order" in query or "lookup" in query:
-        route = Route.TOOL
-    elif len(clean_words) < 5 and "it" in clean_words:
-        route = Route.MISSING_INFO
-    elif "timeout" in query or "fail" in query:
+    elif tokens & ERROR_KEYWORDS:
         route = Route.ERROR
+    elif tokens & TOOL_KEYWORDS:
+        route = Route.TOOL
+    elif len(tokens) < 5 and tokens & VAGUE_PRONOUNS:
+        route = Route.MISSING_INFO
+
     return {
         "route": route.value,
         "risk_level": risk_level,
@@ -113,23 +122,52 @@ def approval_node(state: AgentState) -> dict:
             decision = ApprovalDecision(approved=bool(value))
     else:
         decision = ApprovalDecision(approved=True, comment="mock approval for lab")
-    return {
+
+    update: dict = {
         "approval": decision.model_dump(),
-        "events": [make_event("approval", "completed", f"approved={decision.approved}")],
+        "events": [
+            make_event(
+                "approval",
+                "completed",
+                f"approved={decision.approved} edited={decision.edited_action is not None}",
+                reviewer=decision.reviewer,
+            )
+        ],
     }
+    if decision.edited_action:
+        update["proposed_action"] = decision.edited_action
+    if not decision.approved:
+        update["final_answer"] = (
+            f"Request denied by reviewer ({decision.reviewer}): "
+            f"{decision.comment or 'no reason provided'}"
+        )
+    return update
 
 
 def retry_or_fallback_node(state: AgentState) -> dict:
-    """Record a retry attempt or fallback decision.
+    """Record a retry attempt and annotate whether this attempt will dead-letter.
 
-    TODO(student): implement bounded retry, exponential backoff metadata, and fallback route.
+    The router (route_after_retry) decides the next hop based on attempt vs max_attempts;
+    we mirror that decision into the event payload so audit logs explain *why* a run terminated.
+    Exponential backoff would live here too (delay = base * 2**(attempt-1)) — left as extension.
     """
     attempt = int(state.get("attempt", 0)) + 1
-    errors = [f"transient failure attempt={attempt}"]
+    max_attempts = int(state.get("max_attempts", 3))
+    will_dead_letter = attempt >= max_attempts
+    next_route = "dead_letter" if will_dead_letter else "tool"
     return {
         "attempt": attempt,
-        "errors": errors,
-        "events": [make_event("retry", "completed", "retry attempt recorded", attempt=attempt)],
+        "errors": [f"transient failure attempt={attempt}/{max_attempts}"],
+        "events": [
+            make_event(
+                "retry",
+                "completed",
+                f"retry attempt {attempt}/{max_attempts}, next={next_route}",
+                attempt=attempt,
+                max_attempts=max_attempts,
+                next_route=next_route,
+            )
+        ],
     }
 
 

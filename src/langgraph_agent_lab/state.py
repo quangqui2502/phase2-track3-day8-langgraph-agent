@@ -33,9 +33,12 @@ class LabEvent(BaseModel):
 
 
 class ApprovalDecision(BaseModel):
+    """Three-outcome HITL decision: approve, reject, or edit the proposed action."""
+
     approved: bool = False
     reviewer: str = "mock-reviewer"
     comment: str = ""
+    edited_action: str | None = None  # if set, reviewer rewrote the proposal
 
 
 class AgentState(TypedDict, total=False):

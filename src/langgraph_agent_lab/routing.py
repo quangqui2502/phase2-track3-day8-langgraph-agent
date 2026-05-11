@@ -43,9 +43,10 @@ def route_after_evaluate(state: AgentState) -> str:
 
 
 def route_after_approval(state: AgentState) -> str:
-    """Continue only if approved.
+    """Three-outcome routing for HITL decisions.
 
-    TODO(student): support reject/edit outcomes.
+    - approved (incl. edited proposal): proceed to tool execution
+    - rejected: skip tool, jump straight to finalize (approval_node already set final_answer)
     """
     approval = state.get("approval") or {}
-    return "tool" if approval.get("approved") else "clarify"
+    return "tool" if approval.get("approved") else "finalize"
